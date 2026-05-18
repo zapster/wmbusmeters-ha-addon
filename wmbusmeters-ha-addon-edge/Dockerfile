@@ -2,15 +2,16 @@ ARG BUILD_FROM=ghcr.io/home-assistant/base:latest
 FROM $BUILD_FROM AS build
 
 ARG WMBUSMETERS_REPOSITORY=https://github.com/zapster/wmbusmeters.git
-ARG WMBUSMETERS_BRANCH=fix-amiplus-total-energy-consumption
+ARG WMBUSMETERS_REF=fix-amiplus-total-energy-consumption
 
-ENV LANG C.UTF-8
+ENV LANG=C.UTF-8
 
 RUN apk add --no-cache alpine-sdk pkgconf gcc linux-headers libxml2-dev cmake libusb-dev bash samurai libxslt-dev pkgconf jq
 
 ADD https://api.github.com/repos/zapster/wmbusmeters/git/refs/heads/fix-amiplus-total-energy-consumption version.json
 RUN git clone https://github.com/steve-m/librtlsdr.git && \
-    git clone --branch "${WMBUSMETERS_BRANCH}" --single-branch "${WMBUSMETERS_REPOSITORY}" wmbusmeters && \
+    git clone "${WMBUSMETERS_REPOSITORY}" wmbusmeters && \
+    git -C wmbusmeters checkout "${WMBUSMETERS_REF}" && \
     git clone https://github.com/libxmq/xmq.git && \
     git clone https://github.com/wmbusmeters/rtl-wmbus.git && \
     git clone https://github.com/merbanan/rtl_433.git && \
@@ -45,7 +46,7 @@ RUN cmake -B build -G Ninja \
 WORKDIR /rtl_reset
 RUN make
 
-FROM $BUILD_FROM AS scratch
+FROM $BUILD_FROM AS final
 ENV QEMU_EXECVE=1
 RUN apk add --no-cache pkgconf mosquitto-clients libstdc++ curl libusb libxml2 netcat-openbsd nginx
 

@@ -1,26 +1,73 @@
 name: Build patched add-ons
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/build-patched-addons.yml"
-      - "wmbusmeters-ha-addon/**"
-      - "wmbusmeters-ha-addon-edge/**"
-      - "repository.json"
+  repository_dispatch:
+    types:
+      - build_patched_addons
   workflow_dispatch:
+    inputs:
+      version:
+        description: Add-on version to publish
+        required: false
+      wmbusmeters_sha:
+        description: Exact zapster/wmbusmeters commit SHA to build
+        required: false
+      wmbusmeters_branch:
+        description: Branch to resolve when no SHA is provided
+        required: false
+        default: fix-amiplus-total-energy-consumption
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
   ARCHITECTURES: '["amd64", "aarch64"]'
+  DEFAULT_WMBUSMETERS_BRANCH: fix-amiplus-total-energy-consumption
 
 jobs:
+  prepare:
+    name: Prepare build metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      wmbusmeters_sha: ${{ steps.metadata.outputs.wmbusmeters_sha }}
+      wmbusmeters_ref_label: ${{ steps.metadata.outputs.wmbusmeters_ref_label }}
+    steps:
+      - name: Resolve version and source ref
+        id: metadata
+        env:
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          DISPATCH_SHA: ${{ github.event.client_payload.wmbusmeters_sha }}
+          DISPATCH_BRANCH: ${{ github.event.client_payload.wmbusmeters_branch }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_SHA: ${{ inputs.wmbusmeters_sha }}
+          INPUT_BRANCH: ${{ inputs.wmbusmeters_branch }}
+        run: |
+          version="${DISPATCH_VERSION:-${INPUT_VERSION:-}}"
+          if [ -z "$version" ]; then
+            version="2.0.1-amiplus.$GITHUB_RUN_NUMBER"
+          fi
+
+          branch="${DISPATCH_BRANCH:-${INPUT_BRANCH:-${DEFAULT_WMBUSMETERS_BRANCH}}}"
+          sha="${DISPATCH_SHA:-${INPUT_SHA:-}}"
+          if [ -z "$sha" ]; then
+            sha="$(git ls-remote https://github.com/zapster/wmbusmeters.git "refs/heads/$branch" | cut -f1)"
+          fi
+          if [ -z "$sha" ]; then
+            echo "::error::Could not resolve zapster/wmbusmeters ref for branch '$branch'"
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "wmbusmeters_sha=$sha"
+            echo "wmbusmeters_ref_label=$branch@${sha:0:12}"
+          } >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.addon.image_name }} ${{ matrix.platform.arch }}
+    needs: prepare
     runs-on: ${{ matrix.platform.os }}
     strategy:
       fail-fast: false
@@ -28,10 +75,8 @@ jobs:
         addon:
           - context: wmbusmeters-ha-addon
             image_name: wmbusmeters-ha-addon-amiplus
-            version: 2.0.1-amiplus.1
           - context: wmbusmeters-ha-addon-edge
             image_name: wmbusmeters-ha-addon-amiplus-edge
-            version: 2.0.1-amiplus.1
         platform:
           - arch: amd64
             os: ubuntu-24.04
@@ -49,25 +94,27 @@ jobs:
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           context: ${{ matrix.addon.context }}
           cosign: "false"
+          build-args: |
+            WMBUSMETERS_REF=${{ needs.prepare.outputs.wmbusmeters_sha }}
           image: ghcr.io/${{ github.repository_owner }}/${{ matrix.platform.arch }}-${{ matrix.addon.image_name }}
           image-tags: |
-            ${{ matrix.addon.version }}
+            ${{ needs.prepare.outputs.version }}
             latest
           push: "true"
-          version: ${{ matrix.addon.version }}
+          version: ${{ needs.prepare.outputs.version }}
 
   manifest:
     name: Publish ${{ matrix.addon.image_name }} manifest
-    needs: build
+    needs:
+      - prepare
+      - build
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         addon:
           - image_name: wmbusmeters-ha-addon-amiplus
-            version: 2.0.1-amiplus.1
           - image_name: wmbusmeters-ha-addon-amiplus-edge
-            version: 2.0.1-amiplus.1
 
     steps:
       - name: Publish multi-arch manifest
@@ -78,5 +125,74 @@ jobs:
           cosign: "false"
           image-name: ${{ matrix.addon.image_name }}
           image-tags: |
-            ${{ matrix.addon.version }}
+            ${{ needs.prepare.outputs.version }}
             latest
+
+  update-repository:
+    name: Update add-on repository metadata
+    needs:
+      - prepare
+      - manifest
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Update add-on versions and notes
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          WMBUSMETERS_SHA: ${{ needs.prepare.outputs.wmbusmeters_sha }}
+          WMBUSMETERS_REF_LABEL: ${{ needs.prepare.outputs.wmbusmeters_ref_label }}
+        run: |
+          jq --arg version "$VERSION" '.version = $version' wmbusmeters-ha-addon/config.json > /tmp/stable.json
+          mv /tmp/stable.json wmbusmeters-ha-addon/config.json
+          jq --arg version "$VERSION" '.version = $version' wmbusmeters-ha-addon-edge/config.json > /tmp/edge.json
+          mv /tmp/edge.json wmbusmeters-ha-addon-edge/config.json
+
+          {
+            echo "# Wmbusmeters AMI+ patched add-on"
+            echo
+            echo "This fork builds the Home Assistant add-on with \`wmbusmeters\` from:"
+            echo
+            echo "\`\`\`text"
+            echo "https://github.com/zapster/wmbusmeters"
+            echo "branch: ${DEFAULT_WMBUSMETERS_BRANCH}"
+            echo "commit: ${WMBUSMETERS_SHA}"
+            echo "\`\`\`"
+            echo
+            echo "Current add-on version:"
+            echo
+            echo "\`\`\`text"
+            echo "${VERSION}"
+            echo "\`\`\`"
+            echo
+            echo "The add-ons are published as GitHub Container Registry images:"
+            echo
+            echo "\`\`\`text"
+            echo "ghcr.io/zapster/wmbusmeters-ha-addon-amiplus:${VERSION}"
+            echo "ghcr.io/zapster/wmbusmeters-ha-addon-amiplus-edge:${VERSION}"
+            echo "\`\`\`"
+            echo
+            echo "Install repository URL:"
+            echo
+            echo "\`\`\`text"
+            echo "https://github.com/zapster/wmbusmeters-ha-addon"
+            echo "\`\`\`"
+          } > PATCHED_ADDON.md
+
+          sed -i "1s|^|## ${VERSION}\n- Built from zapster/wmbusmeters ${WMBUSMETERS_REF_LABEL}\n|" wmbusmeters-ha-addon/CHANGELOG.md
+          sed -i "1s|^|## ${VERSION}\n- Built from zapster/wmbusmeters ${WMBUSMETERS_REF_LABEL}\n|" wmbusmeters-ha-addon-edge/CHANGELOG.md
+
+      - name: Commit repository metadata update
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PATCHED_ADDON.md wmbusmeters-ha-addon/config.json wmbusmeters-ha-addon-edge/config.json wmbusmeters-ha-addon/CHANGELOG.md wmbusmeters-ha-addon-edge/CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "No metadata changes to commit."
+            exit 0
+          fi
+          git commit -m "Update patched add-on to ${VERSION}"
+          git push
