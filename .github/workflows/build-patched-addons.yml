@@ -1,0 +1,82 @@
+name: Build patched add-ons
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-patched-addons.yml"
+      - "wmbusmeters-ha-addon/**"
+      - "wmbusmeters-ha-addon-edge/**"
+      - "repository.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  ARCHITECTURES: '["amd64", "aarch64"]'
+
+jobs:
+  build:
+    name: Build ${{ matrix.addon.image_name }} ${{ matrix.platform.arch }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        addon:
+          - context: wmbusmeters-ha-addon
+            image_name: wmbusmeters-ha-addon-amiplus
+            version: 2.0.1-amiplus.1
+          - context: wmbusmeters-ha-addon-edge
+            image_name: wmbusmeters-ha-addon-amiplus-edge
+            version: 2.0.1-amiplus.1
+        platform:
+          - arch: amd64
+            os: ubuntu-24.04
+          - arch: aarch64
+            os: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Build and push image
+        uses: home-assistant/builder/actions/build-image@2026.03.2
+        with:
+          arch: ${{ matrix.platform.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: ${{ matrix.addon.context }}
+          cosign: "false"
+          image: ghcr.io/${{ github.repository_owner }}/${{ matrix.platform.arch }}-${{ matrix.addon.image_name }}
+          image-tags: |
+            ${{ matrix.addon.version }}
+            latest
+          push: "true"
+          version: ${{ matrix.addon.version }}
+
+  manifest:
+    name: Publish ${{ matrix.addon.image_name }} manifest
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        addon:
+          - image_name: wmbusmeters-ha-addon-amiplus
+            version: 2.0.1-amiplus.1
+          - image_name: wmbusmeters-ha-addon-amiplus-edge
+            version: 2.0.1-amiplus.1
+
+    steps:
+      - name: Publish multi-arch manifest
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@2026.03.2
+        with:
+          architectures: ${{ env.ARCHITECTURES }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          cosign: "false"
+          image-name: ${{ matrix.addon.image_name }}
+          image-tags: |
+            ${{ matrix.addon.version }}
+            latest
