@@ -1,3 +1,15 @@
+> [!NOTE]
+> This repository is a temporary Home Assistant add-on fork for the patched AMI+ `wmbusmeters` branch.
+>
+> Compared to upstream `wmbusmeters/wmbusmeters-ha-addon`, this fork:
+>
+> - builds `wmbusmeters` from `zapster/wmbusmeters:fix-amiplus-total-energy-consumption`;
+> - publishes patched add-on images to GitHub Container Registry;
+> - updates the add-on version after successful image builds so Home Assistant can show an update;
+> - is triggered automatically by pushes to the patched `wmbusmeters` branch.
+>
+> Patched `wmbusmeters` fork: https://github.com/zapster/wmbusmeters/tree/fix-amiplus-total-energy-consumption
+
 # wmbusmeters Home Assistant Add-on
 This add-on allows you to acquire utility meter readings without the vendors bridge or gateway as long as they support C1, T1, or S1 telegrams using the wireless mbus protocol (WMBUS).
 
