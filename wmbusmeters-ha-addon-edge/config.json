@@ -1,6 +1,6 @@
 {
   "name": "[edge] Wmbusmeters AMI+ patched",
-  "version": "2.0.1-amiplus.2",
+  "version": "2.0.1-amiplus.3",
   "slug": "wmbusmeters-ha-addon-amiplus-edge",
   "description": "Acquire utility meter readings using the wireless mbus protocol (WMBUS)",
   "arch": [
