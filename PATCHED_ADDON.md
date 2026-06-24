@@ -17,7 +17,7 @@ Current add-on version:
 The add-ons are published as GitHub Container Registry images:
 
 ```text
-ghucr.io/zapster/wmbusmeters-ha-addon-amiplus:2.0.1-amiplus.3
+ghcr.io/zapster/wmbusmeters-ha-addon-amiplus:2.0.1-amiplus.3
 ghcr.io/zapster/wmbusmeters-ha-addon-amiplus-edge:2.0.1-amiplus.3
 ```
 
