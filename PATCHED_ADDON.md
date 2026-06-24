@@ -1,24 +1,27 @@
-# Wmbusmeters AMI+ patched add-on
+# Wmbusmeters add-on (tracking upstream 3.0.0)
 
-This fork builds the Home Assistant add-on with `wmbusmeters` from:
+This add-on builds `wmbusmeters` from the `fix-amiplus-total-energy-consumption` branch,
+which now tracks upstream 3.0.0 without code modifications.
+
+Build source:
 
 ```text
 https://github.com/zapster/wmbusmeters
 branch: fix-amiplus-total-energy-consumption
-commit: 229d5682fe8dc2b5752aac03c93dfbf1894e67e8
+commit: 53cb272ddee4c5727352a2b3fa5c9abd043559db
 ```
 
 Current add-on version:
 
 ```text
-2.0.1-amiplus.3
+3.0.0
 ```
 
 The add-ons are published as GitHub Container Registry images:
 
 ```text
-ghcr.io/zapster/wmbusmeters-ha-addon-amiplus:2.0.1-amiplus.3
-ghcr.io/zapster/wmbusmeters-ha-addon-amiplus-edge:2.0.1-amiplus.3
+ghcr.io/zapster/wmbusmeters-ha-addon-amiplus:3.0.0
+ghcr.io/zapster/wmbusmeters-ha-addon-amiplus-edge:3.0.0
 ```
 
 Install repository URL:
