@@ -1,3 +1,5 @@
+## 3.1.0-1
+- Built from zapster/wmbusmeters fix-amiplus-total-energy-consumption@72508a941b33
 ## 3.0.0-8
 - Built from zapster/wmbusmeters fix-amiplus-total-energy-consumption@c57940a9ce70
 ## 3.0.0-7
